@@ -4,12 +4,12 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'dev-only-change-me')
 DEBUG = os.getenv('DJANGO_DEBUG', '1') == '1'
-ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', '*').split(',')
+ALLOWED_HOSTS = [h.strip() for h in os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if h.strip()]
 
 INSTALLED_APPS = [
     'django.contrib.admin', 'django.contrib.auth', 'django.contrib.contenttypes',
     'django.contrib.sessions', 'django.contrib.messages', 'django.contrib.staticfiles',
-    'corsheaders', 'rest_framework', 'rest_framework.authtoken', 'core',
+    'rest_framework.authtoken', 'rest_framework', 'corsheaders', 'core',
 ]
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware', 'django.middleware.security.SecurityMiddleware',
@@ -24,9 +24,21 @@ DATABASES = {'default': {'ENGINE':os.getenv('DB_ENGINE','django.db.backends.sqli
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME':'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
     {'NAME':'django.contrib.auth.password_validation.MinimumLengthValidator'},
+    {'NAME':'django.contrib.auth.password_validation.CommonPasswordValidator'},
 ]
 LANGUAGE_CODE='fr-fr'; TIME_ZONE='Africa/Lubumbashi'; USE_I18N=True; USE_TZ=True
 STATIC_URL='static/'; STATIC_ROOT=BASE_DIR/'staticfiles'; MEDIA_URL='media/'; MEDIA_ROOT=BASE_DIR/'media'
 DEFAULT_AUTO_FIELD='django.db.models.BigAutoField'
-CORS_ALLOWED_ORIGINS=[x for x in os.getenv('CORS_ALLOWED_ORIGINS','').split(',') if x]
-REST_FRAMEWORK={'DEFAULT_AUTHENTICATION_CLASSES':['rest_framework.authentication.TokenAuthentication','rest_framework.authentication.SessionAuthentication'],'DEFAULT_PERMISSION_CLASSES':['rest_framework.permissions.IsAuthenticated']}
+CORS_ALLOWED_ORIGINS=[x.strip() for x in os.getenv('CORS_ALLOWED_ORIGINS','').split(',') if x.strip()]
+REST_FRAMEWORK={'DEFAULT_AUTHENTICATION_CLASSES':['rest_framework.authentication.TokenAuthentication','rest_framework.authentication.SessionAuthentication'],'DEFAULT_PERMISSION_CLASSES':['rest_framework.permissions.IsAuthenticated'],'DEFAULT_THROTTLE_CLASSES':['rest_framework.throttling.AnonRateThrottle','rest_framework.throttling.UserRateThrottle'],'DEFAULT_THROTTLE_RATES':{'anon':'60/hour','user':'600/hour'}}
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
+DATA_UPLOAD_MAX_MEMORY_SIZE = 12 * 1024 * 1024
+if not DEBUG:
+    SECURE_SSL_REDIRECT=True
+    SESSION_COOKIE_SECURE=True
+    CSRF_COOKIE_SECURE=True
+    SECURE_HSTS_SECONDS=31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS=True
+    SECURE_HSTS_PRELOAD=True
+    SECURE_CONTENT_TYPE_NOSNIFF=True
+    X_FRAME_OPTIONS='DENY'
