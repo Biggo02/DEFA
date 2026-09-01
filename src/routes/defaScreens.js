@@ -3,17 +3,20 @@ import LoanJourneyPage from '../pages/LoanJourneyPage';
 import AgentCollectionPage from '../pages/AgentCollectionPage';
 import LoanStatusPage from '../pages/LoanStatusPage';
 import LoanAccountPage from '../pages/LoanAccountPage';
+import LoanSchedulePage from '../pages/LoanSchedulePage';
+import PaymentHistoryPage from '../pages/PaymentHistoryPage';
+import ReceiptListPage from '../pages/ReceiptListPage';
+import AgentScannedLoanPage from '../pages/AgentScannedLoanPage';
 import AdminApplicationReviewPage from '../pages/AdminApplicationReviewPage';
 
-// Screen registry used by the route adapter. Keep this registry independent
-// from the legacy entry point so migration can happen incrementally.
 export const DEFA_SCREENS = Object.freeze({
   'loan-application': LoanJourneyPage,
   'loan-status': LoanStatusPage,
   'payment-entry': AgentCollectionPage,
   'loan-detail': LoanAccountPage,
-  'schedule': LoanAccountPage,
-  'payment-history': LoanAccountPage,
-  'receipts': LoanAccountPage,
+  'schedule': LoanSchedulePage,
+  'payment-history': PaymentHistoryPage,
+  'receipts': ReceiptListPage,
+  'scanned-loan': AgentScannedLoanPage,
   'application-review': AdminApplicationReviewPage,
 });
