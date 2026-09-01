@@ -5,6 +5,7 @@ from .auth import register, login
 from .api_extra import (DocumentViewSet, AssignmentViewSet, VerificationVisitViewSet,
     LocationConsentViewSet, LocationRecordViewSet, ContractViewSet, CollectionViewSet,
     NotificationViewSet, FraudViewSet, dashboard, qr_lookup)
+from .payment_api import collect_payment
 
 router = DefaultRouter()
 router.register('profiles', ProfileViewSet, basename='profile')
@@ -27,5 +28,6 @@ router.register('fraud-alerts', FraudViewSet, basename='fraud')
 
 urlpatterns = [
     path('health/', health), path('me/', me), path('register/', register), path('login/', login),
-    path('dashboard/', dashboard), path('qr/<uuid:token>/', qr_lookup), path('', include(router.urls))
+    path('dashboard/', dashboard), path('payments/collect/', collect_payment), path('qr/<uuid:token>/', qr_lookup),
+    path('', include(router.urls))
 ]
