@@ -1,18 +1,20 @@
 from decimal import Decimal
+from datetime import timedelta
 from django.db import transaction
+from django.db.models import Sum
 from django.utils import timezone
-from rest_framework import status, viewsets
+from rest_framework import viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
-from django.contrib.auth.models import User
-from .models import Profile, Address, Employment, Business, Reference, LoanApplication, Loan, Installment, Payment, PaymentReceipt, Consent, AuditLog
-from .serializers import ProfileSerializer, AddressSerializer, EmploymentSerializer, BusinessSerializer, ReferenceSerializer, ApplicationSerializer, LoanSerializer, InstallmentSerializer, PaymentSerializer, ReceiptSerializer
+from .models import Profile, Address, Employment, Business, Reference, LoanApplication, Loan, Installment, Payment, PaymentReceipt, AuditLog
+from .serializers import ProfileSerializer, AddressSerializer, EmploymentSerializer, BusinessSerializer, ReferenceSerializer, ApplicationSerializer, LoanSerializer, PaymentSerializer
 
 
 def profile_for(user):
     profile, _ = Profile.objects.get_or_create(user=user)
     return profile
+
 
 def score_application(app):
     p = app.profile
@@ -31,6 +33,7 @@ def score_application(app):
     score = min(score, 100)
     risk = 'A' if score >= 80 else 'B' if score >= 65 else 'C' if score >= 50 else 'D'
     return score, risk
+
 
 class ProfileViewSet(viewsets.ModelViewSet):
     serializer_class = ProfileSerializer
@@ -72,7 +75,8 @@ class ApplicationViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def submit(self, request, pk=None):
         app = self.get_object()
-        if app.status not in ('DRAFT','MORE_INFO'): return Response({'detail':'Cette demande ne peut plus être soumise.'}, status=400)
+        if app.status not in ('DRAFT','MORE_INFO'):
+            return Response({'detail':'Cette demande ne peut plus être soumise.'}, status=400)
         score, risk = score_application(app)
         app.score, app.risk_class, app.status, app.submitted_at = score, risk, 'VERIFYING', timezone.now()
         app.save(update_fields=['score','risk_class','status','submitted_at','updated_at'])
@@ -87,8 +91,18 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         app.status = decision; app.save(update_fields=['status','updated_at'])
         AuditLog.objects.create(actor=p, action=f'APPLICATION_{decision}', object_type='LoanApplication', object_id=str(app.id))
         if decision == 'APPROVED':
+            if hasattr(app, 'loan'): return Response(LoanSerializer(app.loan).data)
             total = Decimal(request.data.get('total_due', app.amount))
             loan = Loan.objects.create(application=app, profile=app.profile, principal=app.amount, total_due=total)
+            count = max(1, app.duration_days // (7 if app.frequency == 'WEEKLY' else 1))
+            if app.frequency == 'MONTHLY': count = max(1, app.duration_days // 30)
+            installment_amount = (total / count).quantize(Decimal('0.01'))
+            start = timezone.localdate() + timedelta(days=7 if app.frequency == 'WEEKLY' else 30)
+            remainder = total - installment_amount * count
+            for n in range(1, count + 1):
+                amount = installment_amount + (remainder if n == count else Decimal('0'))
+                due = start + timedelta(days=(n-1) * (30 if app.frequency == 'MONTHLY' else 7))
+                Installment.objects.create(loan=loan, number=n, due_date=due, amount_due=amount)
             return Response(LoanSerializer(loan).data, status=201)
         return Response(ApplicationSerializer(app).data)
 
@@ -99,8 +113,7 @@ class LoanViewSet(viewsets.ReadOnlyModelViewSet):
         p=profile_for(self.request.user)
         return Loan.objects.all() if p.role in ('ADMIN','ANALYST','AGENT') else Loan.objects.filter(profile=p)
     @action(detail=True, methods=['get'], url_path='by-qr')
-    def by_qr(self, request, pk=None):
-        return Response(LoanSerializer(self.get_object()).data)
+    def by_qr(self, request, pk=None): return Response(LoanSerializer(self.get_object()).data)
 
 class PaymentViewSet(viewsets.ModelViewSet):
     serializer_class = PaymentSerializer
@@ -108,25 +121,32 @@ class PaymentViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         p=profile_for(self.request.user)
         return Payment.objects.all() if p.role in ('ADMIN','AGENT','ANALYST') else Payment.objects.filter(loan__profile=p)
-    @transaction.atomic
-    def perform_create(self, serializer):
-        p=profile_for(self.request.user)
-        if p.role not in ('ADMIN','AGENT'): raise PermissionError('Agent requis')
-        payment=serializer.save(agent=p)
-        remaining = payment.amount
-        for inst in payment.loan.installments.select_for_update().order_by('number'):
-            room=max(Decimal('0'), inst.amount_due-inst.amount_paid)
-            applied=min(room, remaining)
-            if applied:
-                inst.amount_paid += applied
-                inst.status='PAID' if inst.amount_paid >= inst.amount_due else 'PARTIAL'
-                inst.save(update_fields=['amount_paid','status'])
-                remaining -= applied
-            if remaining <= 0: break
-        receipt=PaymentReceipt.objects.create(payment=payment, number=f'DEFA-{timezone.now():%Y%m%d}-{str(payment.id)[:8].upper()}')
-        total_paid=payment.loan.payments.aggregate(total=__import__('django.db.models',fromlist=['Sum']).Sum('amount'))['total'] or 0
-        if total_paid >= payment.loan.total_due: payment.loan.status='PAID'; payment.loan.save(update_fields=['status'])
-        AuditLog.objects.create(actor=p, action='PAYMENT_RECORDED', object_type='Payment', object_id=str(payment.id), metadata={'amount':str(payment.amount),'receipt':receipt.number})
+    def create(self, request, *args, **kwargs):
+        p=profile_for(request.user)
+        if p.role not in ('ADMIN','AGENT'):
+            return Response({'detail':'Seuls les agents autorisés peuvent enregistrer un encaissement.'}, status=403)
+        serializer=self.get_serializer(data=request.data); serializer.is_valid(raise_exception=True)
+        with transaction.atomic():
+            payment=serializer.save(agent=p)
+            remaining = payment.amount
+            for inst in payment.loan.installments.select_for_update().order_by('number'):
+                room=max(Decimal('0'), inst.amount_due-inst.amount_paid)
+                applied=min(room, remaining)
+                if applied:
+                    inst.amount_paid += applied
+                    inst.status='PAID' if inst.amount_paid >= inst.amount_due else 'PARTIAL'
+                    inst.save(update_fields=['amount_paid','status'])
+                    remaining -= applied
+                if remaining <= 0: break
+            if remaining > 0:
+                payment.delete()
+                return Response({'detail':'Le montant dépasse le solde du prêt.'}, status=400)
+            receipt=PaymentReceipt.objects.create(payment=payment, number=f'DEFA-{timezone.now():%Y%m%d}-{str(payment.id)[:8].upper()}')
+            total_paid=payment.loan.payments.aggregate(total=Sum('amount'))['total'] or Decimal('0')
+            if total_paid >= payment.loan.total_due:
+                payment.loan.status='PAID'; payment.loan.save(update_fields=['status'])
+            AuditLog.objects.create(actor=p, action='PAYMENT_RECORDED', object_type='Payment', object_id=str(payment.id), metadata={'amount':str(payment.amount),'receipt':receipt.number})
+        return Response({'payment':PaymentSerializer(payment).data,'receipt':{'number':receipt.number}}, status=201)
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
