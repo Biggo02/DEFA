@@ -50,6 +50,19 @@ class Reference(models.Model):
     phone = models.CharField(max_length=30)
     verified = models.BooleanField(default=False)
 
+class UploadedDocument(models.Model):
+    TYPES = [('NATIONAL_ID','Pièce d’identité'),('ADDRESS','Preuve de domicile'),('INCOME','Preuve de revenus'),('BUSINESS','Preuve de commerce'),('CONTRACT','Contrat'),('OTHER','Autre')]
+    STATUS = [('PENDING','En attente'),('VERIFIED','Vérifié'),('REJECTED','Rejeté')]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='documents')
+    document_type = models.CharField(max_length=30, choices=TYPES)
+    file = models.FileField(upload_to='documents/%Y/%m/', max_length=500)
+    status = models.CharField(max_length=20, choices=STATUS, default='PENDING')
+    rejection_reason = models.TextField(blank=True)
+    verified_by = models.ForeignKey(Profile, null=True, blank=True, on_delete=models.PROTECT, related_name='documents_verified')
+    created_at = models.DateTimeField(auto_now_add=True)
+    verified_at = models.DateTimeField(null=True, blank=True)
+
 class LoanApplication(models.Model):
     STATUS = [('DRAFT','Brouillon'),('SUBMITTED','Soumise'),('VERIFYING','En vérification'),('REVIEW','Analyse'),('MORE_INFO','Informations complémentaires'),('APPROVED','Approuvée'),('REJECTED','Refusée')]
     PURPOSES = [('BUSINESS','Commerce'),('STOCK','Stock'),('EQUIPMENT','Équipement'),('PERSONAL','Personnel'),('EMERGENCY','Urgence'),('OTHER','Autre')]
@@ -80,6 +93,33 @@ class VerificationVisit(models.Model):
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
 
+class AgentAssignment(models.Model):
+    STATUS = [('ASSIGNED','Assignée'),('IN_PROGRESS','En cours'),('COMPLETED','Terminée'),('CANCELLED','Annulée')]
+    agent = models.ForeignKey(Profile, on_delete=models.PROTECT, related_name='assignments')
+    application = models.ForeignKey(LoanApplication, on_delete=models.CASCADE, related_name='assignments')
+    assigned_by = models.ForeignKey(Profile, on_delete=models.PROTECT, related_name='assignments_created')
+    status = models.CharField(max_length=20, choices=STATUS, default='ASSIGNED')
+    due_at = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+class LocationConsent(models.Model):
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='location_consents')
+    purpose = models.CharField(max_length=100)
+    granted = models.BooleanField(default=False)
+    version = models.CharField(max_length=20, default='1.0')
+    granted_at = models.DateTimeField(null=True, blank=True)
+
+class LocationRecord(models.Model):
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='locations')
+    consent = models.ForeignKey(LocationConsent, on_delete=models.PROTECT, related_name='records')
+    kind = models.CharField(max_length=20, choices=[('HOME','Domicile'),('BUSINESS','Commerce'),('VISIT','Visite')])
+    latitude = models.DecimalField(max_digits=9, decimal_places=6)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6)
+    accuracy_m = models.DecimalField(max_digits=9, decimal_places=2, null=True, blank=True)
+    captured_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
 class Loan(models.Model):
     STATUS = [('ACTIVE','Actif'),('LATE','En retard'),('PAID','Remboursé'),('CANCELLED','Annulé')]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -104,6 +144,15 @@ class Installment(models.Model):
         unique_together = ('loan','number')
         ordering = ['number']
 
+class Contract(models.Model):
+    STATUS = [('DRAFT','Brouillon'),('PENDING','En attente'),('SIGNED','Signé'),('CANCELLED','Annulé')]
+    loan = models.OneToOneField(Loan, on_delete=models.PROTECT, related_name='contract')
+    version = models.CharField(max_length=20, default='1.0')
+    status = models.CharField(max_length=20, choices=STATUS, default='DRAFT')
+    terms = models.JSONField(default=dict, blank=True)
+    signed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
 class Payment(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     loan = models.ForeignKey(Loan, on_delete=models.PROTECT, related_name='payments')
@@ -118,6 +167,43 @@ class PaymentReceipt(models.Model):
     payment = models.OneToOneField(Payment, on_delete=models.PROTECT, related_name='receipt')
     number = models.CharField(max_length=40, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+class CollectionVisit(models.Model):
+    RESULT = [('PENDING','En attente'),('PAID','Paiement reçu'),('PROMISE','Promesse de paiement'),('ABSENT','Client absent'),('ESCALATE','À escalader')]
+    loan = models.ForeignKey(Loan, on_delete=models.PROTECT, related_name='collection_visits')
+    agent = models.ForeignKey(Profile, on_delete=models.PROTECT, related_name='collection_visits')
+    scheduled_at = models.DateTimeField(null=True, blank=True)
+    visited_at = models.DateTimeField(null=True, blank=True)
+    result = models.CharField(max_length=20, choices=RESULT, default='PENDING')
+    notes = models.TextField(blank=True)
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+
+class Notification(models.Model):
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='notifications')
+    title = models.CharField(max_length=200)
+    message = models.TextField()
+    kind = models.CharField(max_length=40, default='INFO')
+    read_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+class FraudAlert(models.Model):
+    SEVERITY = [('LOW','Faible'),('MEDIUM','Moyenne'),('HIGH','Élevée'),('CRITICAL','Critique')]
+    STATUS = [('OPEN','Ouverte'),('REVIEWING','En analyse'),('RESOLVED','Résolue'),('DISMISSED','Écartée')]
+    profile = models.ForeignKey(Profile, on_delete=models.PROTECT, related_name='fraud_alerts')
+    application = models.ForeignKey(LoanApplication, on_delete=models.PROTECT, null=True, blank=True, related_name='fraud_alerts')
+    rule = models.CharField(max_length=120)
+    severity = models.CharField(max_length=20, choices=SEVERITY, default='MEDIUM')
+    status = models.CharField(max_length=20, choices=STATUS, default='OPEN')
+    details = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+class SystemSetting(models.Model):
+    key = models.CharField(max_length=100, unique=True)
+    value = models.JSONField(default=dict)
+    description = models.TextField(blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
 class Consent(models.Model):
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='consents')
