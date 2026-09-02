@@ -1,16 +1,48 @@
 from django.urls import path
+from django.shortcuts import redirect
+from django.contrib.auth.decorators import login_required
 from .web_views import (home, simulator, sign_in, sign_up, sign_out, dashboard,
     new_application, application_detail, application_submit, loan_detail,
     operations_dashboard, application_decision, collect_payment)
-from .web_extra import (page, my_applications, client_profile, client_documents,
+from .web_extra import (page as _page, my_applications, client_profile, client_documents,
     client_notifications, client_payments, client_receipts, client_schedule,
     client_payment_detail, client_receipt_detail, client_loan_contract,
     agent_clients, agent_visits, agent_payments, agent_collection, agent_qr,
     admin_requests, admin_clients, admin_loans, admin_payments, admin_documents,
     admin_alerts, admin_audit, admin_settings, dashboard_kpis)
 
+
+def page(request, title, description, area='public', eyebrow=None):
+    if area != 'public' and not request.user.is_authenticated:
+        return redirect('login')
+    return _page(request, title, description, area, eyebrow)
+
+client_profile = login_required(client_profile)
+client_documents = login_required(client_documents)
+client_notifications = login_required(client_notifications)
+client_payments = login_required(client_payments)
+client_receipts = login_required(client_receipts)
+client_schedule = login_required(client_schedule)
+client_payment_detail = login_required(client_payment_detail)
+client_receipt_detail = login_required(client_receipt_detail)
+client_loan_contract = login_required(client_loan_contract)
+my_applications = login_required(my_applications)
+agent_clients = login_required(agent_clients)
+agent_visits = login_required(agent_visits)
+agent_payments = login_required(agent_payments)
+agent_collection = login_required(agent_collection)
+agent_qr = login_required(agent_qr)
+admin_requests = login_required(admin_requests)
+admin_clients = login_required(admin_clients)
+admin_loans = login_required(admin_loans)
+admin_payments = login_required(admin_payments)
+admin_documents = login_required(admin_documents)
+admin_alerts = login_required(admin_alerts)
+admin_audit = login_required(admin_audit)
+admin_settings = login_required(admin_settings)
+dashboard_kpis = login_required(dashboard_kpis)
+
 urlpatterns = [
-    # 1-11 PUBLIC
     path('', home, name='home'),
     path('comment-ca-marche/', lambda r: page(r, 'Comment ça marche', 'Découvrez le parcours demande → vérification → décision → contrat → remboursement.'), name='how_it_works'),
     path('simulateur/', simulator, name='simulator'),
@@ -24,7 +56,6 @@ urlpatterns = [
     path('mot-de-passe-oublie/', lambda r: page(r, 'Mot de passe oublié', 'La récupération sécurisée du compte sera effectuée sans révéler l’existence d’un compte.'), name='password_reset'),
     path('deconnexion/', sign_out, name='logout'),
 
-    # 12-33 CLIENT
     path('app/tableau-de-bord/', dashboard, name='dashboard'),
     path('app/nouvelle-demande/', new_application, name='new_application'),
     path('app/identite/', lambda r: page(r, 'Identité / KYC', 'Gérez les informations nécessaires à votre vérification.', 'client'), name='client_kyc'),
@@ -51,7 +82,6 @@ urlpatterns = [
     path('app/aide/', lambda r: page(r, 'Aide', 'FAQ, assistance et aide au remboursement.', 'client'), name='client_help'),
     path('app/pret/<uuid:pk>/contrat/', client_loan_contract, name='loan_contract'),
 
-    # 34-49 AGENT
     path('agent/', operations_dashboard, name='agent_dashboard'),
     path('agent/clients/', agent_clients, name='agent_clients'),
     path('agent/client/<int:pk>/', lambda r, pk: page(r, 'Fiche client', 'Informations strictement nécessaires à la mission.', 'agent'), name='agent_client_detail'),
@@ -69,7 +99,6 @@ urlpatterns = [
     path('agent/rapport/', lambda r: page(r, 'Rapport quotidien', 'Visites, paiements, incidents et commentaires.', 'agent'), name='agent_report'),
     path('agent/profil/', lambda r: page(r, 'Profil agent', 'Profil, zone, statut et paramètres.', 'agent'), name='agent_profile'),
 
-    # 50-73 ADMINISTRATION
     path('admin-dashboard/', dashboard_kpis, name='admin_dashboard'),
     path('admin/demandes/', admin_requests, name='admin_requests'),
     path('admin/demande/<uuid:pk>/', lambda r, pk: page(r, 'Analyse d’une demande', 'Vue 360° du dossier et des éléments nécessaires à la décision.', 'admin'), name='admin_application_detail'),
@@ -95,7 +124,6 @@ urlpatterns = [
     path('admin/parametres/', admin_settings, name='admin_settings'),
     path('admin/securite/', lambda r: page(r, 'Sécurité', 'Politiques, accès et événements suspects.', 'admin'), name='admin_security'),
 
-    # 74-82 SYSTEM STATES
     path('etat/demande-en-cours/', lambda r: page(r, 'Demande en cours', 'Votre dossier suit le processus DEFA.'), name='state_pending'),
     path('etat/informations-manquantes/', lambda r: page(r, 'Informations manquantes', 'Complétez les éléments demandés avant la poursuite du dossier.'), name='state_missing'),
     path('etat/approuvee/', lambda r: page(r, 'Demande approuvée', 'Votre demande est approuvée sous réserve des conditions et formalités applicables.'), name='state_approved'),
