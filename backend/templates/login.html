@@ -1,1 +1,21 @@
-{% extends 'base.html' %}{% block content %}<section class="auth card"><h1>Connexion</h1><p>Accédez à votre espace DEFA.</p><form method="post">{% csrf_token %}<label>Nom d'utilisateur</label><input name="username" required><label>Mot de passe</label><input name="password" type="password" required><button class="btn">Se connecter</button></form><p>Pas encore de compte ? <a href="/inscription/">Créer un compte</a></p></section>{% endblock %}
+{% extends 'base.html' %}
+{% block title %}Connexion — DEFA{% endblock %}
+{% block content %}
+<section class="auth card">
+  <div class="pill">ESPACE CLIENT</div>
+  <h1>Connexion</h1>
+  <p class="lead">Accédez à votre espace DEFA avec votre numéro de téléphone.</p>
+  <form method="post" id="login-form" autocomplete="on">
+    {% csrf_token %}
+    <label>Numéro de téléphone
+      <input name="username" type="tel" inputmode="tel" autocomplete="tel" required maxlength="30" placeholder="+243 8XX XXX XXX">
+    </label>
+    <label>Mot de passe
+      <input name="password" type="password" autocomplete="current-password" required placeholder="Votre mot de passe">
+    </label>
+    <button class="btn" type="submit">Se connecter</button>
+  </form>
+  <p><a href="/mot-de-passe-oublie/">Mot de passe oublié ?</a></p>
+  <p>Pas encore de compte ? <a href="/inscription/">Créer un compte</a></p>
+</section>
+{% endblock %}
