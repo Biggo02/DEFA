@@ -4,9 +4,11 @@
 <section class="page narrow">
   <span class="pill">ÉTAPE 1 → DOSSIER</span>
   <h1>Demander un prêt</h1>
-  <p>Montant minimum <strong>100 000 FC</strong>, uniquement par tranches de 100 000 FC. Frais fixes de service : <strong>12 %</strong> du capital.</p>
-  <form method="post" enctype="multipart/form-data" class="card form">
+  <p>Montant minimum <strong>100 000 FC</strong>, uniquement par tranches de 100 000 FC. Frais de service : <strong>12 %</strong> du capital.</p>
+
+  <form method="post" enctype="multipart/form-data" class="card form" id="loan-form" novalidate>
     {% csrf_token %}
+
     <h2>1. Identité</h2>
     <div class="grid two">
       <label>Prénom<input value="{{ user.first_name }}" disabled></label>
@@ -16,9 +18,11 @@
       <label>Téléphone<input value="{{ profile.phone }}" disabled></label>
       <label>Numéro de pièce d’identité<input name="national_id" required value="{{ profile.national_id }}"></label>
     </div>
+
     <h2>2. Adresse</h2>
     <label>Adresse complète<input name="home_address" required></label>
     <div class="grid two"><label>Ville<input name="city" required></label><label>Quartier<input name="neighborhood" required></label></div>
+
     <h2>3. Activité et revenus</h2>
     <div class="grid two">
       <label>Situation<select name="employment_status"><option value="EMPLOYED">Salarié</option><option value="SELF_EMPLOYED">Indépendant</option><option value="BUSINESS">Commerçant</option><option value="OTHER">Autre</option></select></label>
@@ -26,19 +30,107 @@
     </div>
     <div class="grid two"><label>Employeur / activité<input name="employer"></label><label>Poste / fonction<input name="position"></label></div>
     <div class="grid two"><label>Revenu mensuel (FC)<input name="monthly_income" type="number" min="0" value="0" required></label><label>Charges mensuelles (FC)<input name="monthly_expenses" type="number" min="0" value="0" required></label></div>
+
     <details><summary>Commerce (si applicable)</summary><div class="grid two"><label>Nom du commerce<input name="business_name"></label><label>Activité<input name="business_activity"></label><label>Ancienneté (ans)<input name="business_years" type="number" min="0" step="0.1" value="0"></label><label>Chiffre d'affaires mensuel<input name="business_revenue" type="number" min="0" value="0"></label><label>Charges du commerce<input name="business_expenses" type="number" min="0" value="0"></label></div></details>
+
     <h2>4. Prêt</h2>
-    <div class="grid two"><label>Montant souhaité (FC)<input name="amount" type="number" min="100000" step="100000" value="100000" required></label><label>Durée (jours)<input name="duration_days" type="number" min="7" value="30" required></label></div>
+    <div class="grid two">
+      <label>Montant souhaité (FC)
+        <input id="loan-amount" name="amount" type="number" min="100000" step="100000" value="100000" required inputmode="numeric">
+        <small id="amount-help">Montant autorisé : 100 000 FC, 200 000 FC, 300 000 FC, etc.</small>
+      </label>
+      <label>Durée (jours)<input name="duration_days" type="number" min="7" value="30" required></label>
+    </div>
+
+    <div class="card loan-preview" id="loan-preview" aria-live="polite">
+      <div class="pill">RÉCAPITULATIF FINANCIER</div>
+      <div class="row"><span>Capital demandé</span><strong id="preview-principal">100 000 FC</strong></div>
+      <div class="row"><span>Frais de service (12 %)</span><strong id="preview-fee">12 000 FC</strong></div>
+      <div class="row"><span>Total à rembourser</span><strong id="preview-total">112 000 FC</strong></div>
+      <p id="amount-error" class="alert" hidden></p>
+    </div>
+
     <div class="grid two"><label>Fréquence<select name="frequency"><option value="WEEKLY">Hebdomadaire</option><option value="MONTHLY">Mensuelle</option></select></label><label>Objet<select name="purpose"><option value="BUSINESS">Commerce</option><option value="STOCK">Stock</option><option value="EQUIPMENT">Équipement</option><option value="PERSONAL">Personnel</option><option value="EMERGENCY">Urgence</option><option value="OTHER">Autre</option></select></label></div>
     <label>Détail du projet<textarea name="purpose_detail" rows="3"></textarea></label>
+
     <h2>5. Références</h2>
     <div class="grid three"><label>Nom<input name="reference_name" required></label><label>Relation<input name="reference_relationship" required></label><label>Téléphone<input name="reference_phone" required></label></div>
     <div class="grid three"><label>Nom<input name="reference_name"></label><label>Relation<input name="reference_relationship"></label><label>Téléphone<input name="reference_phone"></label></div>
+
     <h2>6. Documents</h2>
     <div class="grid two"><label>Pièce d’identité<input type="file" name="document_id" accept="image/*,.pdf" required></label><label>Preuve de domicile<input type="file" name="document_address" accept="image/*,.pdf"></label><label>Preuve de revenus<input type="file" name="document_income" accept="image/*,.pdf"></label><label>Preuve de commerce<input type="file" name="document_business" accept="image/*,.pdf"></label></div>
     <label class="check"><input type="checkbox" name="location_consent" required> J'autorise DEFA à utiliser ma localisation uniquement pour les vérifications liées à mon dossier.</label>
     <label class="check"><input type="checkbox" required> Je confirme que les informations fournies sont exactes.</label>
-    <button class="btn" type="submit">Enregistrer le dossier</button>
+    <button class="btn" id="submit-btn" type="submit">Enregistrer le dossier</button>
   </form>
 </section>
+
+<script>
+(function () {
+  const form = document.getElementById('loan-form');
+  const amount = document.getElementById('loan-amount');
+  const principal = document.getElementById('preview-principal');
+  const fee = document.getElementById('preview-fee');
+  const total = document.getElementById('preview-total');
+  const error = document.getElementById('amount-error');
+  const help = document.getElementById('amount-help');
+  const submit = document.getElementById('submit-btn');
+  const min = 100000;
+  const step = 100000;
+  const rate = 0.12;
+
+  function money(value) {
+    return new Intl.NumberFormat('fr-FR').format(value) + ' FC';
+  }
+
+  function updateLoanPreview() {
+    const value = Number(amount.value);
+    const valid = Number.isFinite(value) && value >= min && value % step === 0;
+
+    if (!Number.isFinite(value) || value <= 0) {
+      principal.textContent = money(min);
+      fee.textContent = money(min * rate);
+      total.textContent = money(min * (1 + rate));
+      error.hidden = true;
+      submit.disabled = false;
+      amount.setCustomValidity('');
+      help.textContent = 'Montant autorisé : 100 000 FC, 200 000 FC, 300 000 FC, etc.';
+      return;
+    }
+
+    if (!valid) {
+      principal.textContent = money(value);
+      fee.textContent = '—';
+      total.textContent = '—';
+      error.textContent = value < min
+        ? 'Le montant minimum est de 100 000 FC.'
+        : 'Le montant doit être un multiple de 100 000 FC (100 000, 200 000, 300 000, etc.).';
+      error.hidden = false;
+      submit.disabled = true;
+      amount.setCustomValidity(error.textContent);
+      help.textContent = 'Montant invalide : choisissez une tranche de 100 000 FC.';
+      return;
+    }
+
+    const calculatedFee = value * rate;
+    principal.textContent = money(value);
+    fee.textContent = money(calculatedFee);
+    total.textContent = money(value + calculatedFee);
+    error.hidden = true;
+    submit.disabled = false;
+    amount.setCustomValidity('');
+    help.textContent = 'Montant accepté. Les frais sont de 12 % du capital.';
+  }
+
+  amount.addEventListener('input', updateLoanPreview);
+  form.addEventListener('submit', function (event) {
+    updateLoanPreview();
+    if (!form.checkValidity()) {
+      event.preventDefault();
+      form.reportValidity();
+    }
+  });
+  updateLoanPreview();
+})();
+</script>
 {% endblock %}
