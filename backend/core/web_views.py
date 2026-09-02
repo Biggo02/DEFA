@@ -1,4 +1,5 @@
 from decimal import Decimal, InvalidOperation
+from datetime import timedelta
 
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
@@ -12,7 +13,7 @@ from django.utils import timezone
 
 from .models import (
     Address, Business, Employment, Loan, LoanApplication, Payment, PaymentReceipt,
-    Profile, Reference, UploadedDocument, LocationConsent, LocationRecord,
+    Profile, Reference, UploadedDocument, LocationConsent,
     Installment, Contract, Notification, AuditLog,
 )
 
@@ -43,10 +44,7 @@ def simulator(request):
         amount = MIN_LOAN
     valid = valid_loan_amount(amount)
     fee, total = loan_values(amount) if valid else (Decimal('0'), Decimal('0'))
-    return render(request, 'simulator.html', {
-        'amount': amount, 'fee': fee, 'total': total, 'valid': valid,
-        'min_loan': MIN_LOAN, 'step_loan': STEP_LOAN,
-    })
+    return render(request, 'simulator.html', {'amount': amount, 'fee': fee, 'total': total, 'valid': valid, 'min_loan': MIN_LOAN, 'step_loan': STEP_LOAN})
 
 
 def sign_in(request):
@@ -98,10 +96,7 @@ def dashboard(request):
     loans = Loan.objects.filter(profile=profile).order_by('-created_at')
     payments = Payment.objects.filter(loan__profile=profile).select_related('loan').order_by('-created_at')[:10]
     notifications = Notification.objects.filter(profile=profile).order_by('-created_at')[:8]
-    return render(request, 'dashboard.html', {
-        'profile': profile, 'applications': applications, 'loans': loans,
-        'payments': payments, 'notifications': notifications,
-    })
+    return render(request, 'dashboard.html', {'profile': profile, 'applications': applications, 'loans': loans, 'payments': payments, 'notifications': notifications})
 
 
 @login_required
@@ -120,13 +115,7 @@ def new_application(request):
             if duration < 7:
                 raise ValidationError('La durée minimale est de 7 jours.')
             with transaction.atomic():
-                app = LoanApplication.objects.create(
-                    profile=profile, amount=amount, duration_days=duration,
-                    frequency=request.POST.get('frequency', 'WEEKLY'),
-                    purpose=request.POST.get('purpose', 'OTHER'),
-                    purpose_detail=request.POST.get('purpose_detail', '').strip(),
-                    monthly_income=income, monthly_expenses=expenses,
-                )
+                app = LoanApplication.objects.create(profile=profile, amount=amount, duration_days=duration, frequency=request.POST.get('frequency', 'WEEKLY'), purpose=request.POST.get('purpose', 'OTHER'), purpose_detail=request.POST.get('purpose_detail', '').strip(), monthly_income=income, monthly_expenses=expenses)
                 _save_client_dossier(request, profile, app)
             messages.success(request, 'Demande enregistrée. Vérifiez le dossier puis cliquez sur « Soumettre » pour lancer l’analyse.')
             return redirect('application_detail', app.id)
@@ -138,33 +127,16 @@ def new_application(request):
 def _save_client_dossier(request, profile, app):
     profile.national_id = request.POST.get('national_id', profile.national_id).strip()
     profile.save(update_fields=['national_id'])
-    Employment.objects.update_or_create(profile=profile, defaults={
-        'status': request.POST.get('employment_status', 'EMPLOYED'),
-        'employer': request.POST.get('employer', '').strip(),
-        'position': request.POST.get('position', '').strip(),
-        'monthly_income': app.monthly_income,
-        'years_active': Decimal(request.POST.get('employment_years', '0') or '0'),
-    })
-    Address.objects.update_or_create(profile=profile, kind='HOME', defaults={
-        'address': request.POST.get('home_address', '').strip(),
-        'city': request.POST.get('city', '').strip(),
-        'neighborhood': request.POST.get('neighborhood', '').strip(),
-    })
+    Employment.objects.update_or_create(profile=profile, defaults={'status': request.POST.get('employment_status', 'EMPLOYED'), 'employer': request.POST.get('employer', '').strip(), 'position': request.POST.get('position', '').strip(), 'monthly_income': app.monthly_income, 'years_active': Decimal(request.POST.get('employment_years', '0') or '0')})
+    Address.objects.update_or_create(profile=profile, kind='HOME', defaults={'address': request.POST.get('home_address', '').strip(), 'city': request.POST.get('city', '').strip(), 'neighborhood': request.POST.get('neighborhood', '').strip()})
     business_name = request.POST.get('business_name', '').strip()
     business_activity = request.POST.get('business_activity', '').strip()
     if business_name and business_activity:
-        Business.objects.create(profile=profile, name=business_name, activity=business_activity,
-                                years_active=Decimal(request.POST.get('business_years', '0') or '0'),
-                                monthly_revenue=Decimal(request.POST.get('business_revenue', '0') or '0'),
-                                monthly_expenses=Decimal(request.POST.get('business_expenses', '0') or '0'))
-    names = request.POST.getlist('reference_name')
-    relations = request.POST.getlist('reference_relationship')
-    phones = request.POST.getlist('reference_phone')
-    for name, relation, phone in zip(names, relations, phones):
+        Business.objects.create(profile=profile, name=business_name, activity=business_activity, years_active=Decimal(request.POST.get('business_years', '0') or '0'), monthly_revenue=Decimal(request.POST.get('business_revenue', '0') or '0'), monthly_expenses=Decimal(request.POST.get('business_expenses', '0') or '0'))
+    for name, relation, phone in zip(request.POST.getlist('reference_name'), request.POST.getlist('reference_relationship'), request.POST.getlist('reference_phone')):
         if name.strip() and phone.strip():
             Reference.objects.create(profile=profile, name=name.strip(), relationship=relation.strip(), phone=phone.strip())
-    consent = request.POST.get('location_consent') == 'on'
-    if consent:
+    if request.POST.get('location_consent') == 'on':
         LocationConsent.objects.create(profile=profile, purpose='Vérification du dossier de prêt', granted=True, granted_at=timezone.now())
     for field, kind in (('document_id', 'NATIONAL_ID'), ('document_address', 'ADDRESS'), ('document_income', 'INCOME'), ('document_business', 'BUSINESS')):
         f = request.FILES.get(field)
@@ -212,12 +184,7 @@ def application_detail(request, pk):
     profile, _ = Profile.objects.get_or_create(user=request.user)
     app = get_object_or_404(LoanApplication, pk=pk, profile=profile)
     fee, total = loan_values(app.amount)
-    return render(request, 'application_detail.html', {
-        'app': app, 'fee': fee, 'total': total,
-        'documents': profile.documents.order_by('-created_at'),
-        'references': profile.references.order_by('-id'),
-        'address': profile.addresses.filter(kind='HOME').first(),
-    })
+    return render(request, 'application_detail.html', {'app': app, 'fee': fee, 'total': total, 'documents': profile.documents.order_by('-created_at'), 'references': profile.references.order_by('-id'), 'address': profile.addresses.filter(kind='HOME').first()})
 
 
 @login_required
@@ -263,10 +230,11 @@ def application_decision(request, pk):
                 count = max(1, app.duration_days // (30 if app.frequency == 'MONTHLY' else 7))
                 installment = (total / count).quantize(Decimal('0.01'))
                 remainder = total - installment * count
-                start = timezone.localdate() + timezone.timedelta(days=30 if app.frequency == 'MONTHLY' else 7)
+                step_days = 30 if app.frequency == 'MONTHLY' else 7
+                start = timezone.localdate() + timedelta(days=step_days)
                 for n in range(1, count + 1):
                     amount = installment + (remainder if n == count else Decimal('0'))
-                    due = start + timezone.timedelta(days=(n-1) * (30 if app.frequency == 'MONTHLY' else 7))
+                    due = start + timedelta(days=(n-1) * step_days)
                     Installment.objects.create(loan=loan, number=n, due_date=due, amount_due=amount)
                 Contract.objects.create(loan=loan, status='PENDING', terms={'principal': str(app.amount), 'fee': str(fee), 'total_due': str(total), 'duration_days': app.duration_days, 'frequency': app.frequency})
                 Notification.objects.create(profile=app.profile, title='Demande approuvée', message='Votre demande DEFA est approuvée. Consultez votre contrat.', kind='LOAN_APPROVED')
