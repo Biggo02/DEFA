@@ -32,6 +32,13 @@ def valid_loan_amount(amount):
     return amount >= MIN_LOAN and amount % STEP_LOAN == 0
 
 
+def normalize_phone(value):
+    value = ''.join(value.strip().split())
+    if value.startswith('00'):
+        value = '+' + value[2:]
+    return value
+
+
 def home(request):
     return render(request, 'home.html')
 
@@ -51,13 +58,19 @@ def sign_in(request):
     if request.user.is_authenticated:
         return redirect('dashboard')
     if request.method == 'POST':
-        username = request.POST.get('username', '').strip()
+        phone = normalize_phone(request.POST.get('username', ''))
         password = request.POST.get('password', '')
-        user = authenticate(request, username=username, password=password)
+        user = authenticate(request, username=phone, password=password)
+        if user is None:
+            try:
+                profile = Profile.objects.select_related('user').get(phone=phone)
+                user = authenticate(request, username=profile.user.username, password=password)
+            except Profile.DoesNotExist:
+                user = None
         if user:
             login(request, user)
             return redirect('dashboard')
-        messages.error(request, 'Identifiants invalides.')
+        messages.error(request, 'Numéro de téléphone ou mot de passe incorrect.')
     return render(request, 'login.html')
 
 
@@ -68,7 +81,7 @@ def sign_up(request):
         last_name = request.POST.get('last_name', '').strip()
         postnom = request.POST.get('postnom', '').strip()
         first_name = request.POST.get('first_name', '').strip()
-        phone = request.POST.get('phone', '').strip()
+        phone = normalize_phone(request.POST.get('phone', ''))
         password = request.POST.get('password', '')
         password_confirm = request.POST.get('password_confirm', '')
         if not last_name or not postnom or not first_name or not phone:
@@ -77,7 +90,7 @@ def sign_up(request):
             messages.error(request, 'Le mot de passe doit contenir au moins 8 caractères.')
         elif password != password_confirm:
             messages.error(request, 'Les deux mots de passe ne correspondent pas.')
-        elif User.objects.filter(username=phone).exists():
+        elif User.objects.filter(username=phone).exists() or Profile.objects.filter(phone=phone).exists():
             messages.error(request, 'Un compte existe déjà avec ce numéro de téléphone.')
         else:
             user = User.objects.create_user(
@@ -283,10 +296,9 @@ def collect_payment(request, pk):
                 if left <= 0: break
             receipt = PaymentReceipt.objects.create(payment=payment, number=f'DEFA-{timezone.now():%Y%m%d}-{str(payment.id)[:8].upper()}')
             if paid + amount >= loan.total_due:
-                loan.status = 'PAID'; loan.save(update_fields=['status'])
-            Notification.objects.create(profile=loan.profile, title='Paiement enregistré', message=f'Paiement de {amount} FC reçu. Reçu {receipt.number}.', kind='PAYMENT')
-            AuditLog.objects.create(actor=profile, action='PAYMENT_RECORDED', object_type='Payment', object_id=str(payment.id), metadata={'amount': str(amount), 'loan': str(loan.id)})
-        messages.success(request, f'Paiement enregistré. Reçu {receipt.number}.')
+                loan.status = 'PAID'
+                loan.save(update_fields=['status'])
+        messages.success(request, f'Paiement enregistré. Reçu : {receipt.number}.')
     except (ValidationError, InvalidOperation, ValueError) as exc:
         messages.error(request, exc.message if hasattr(exc, 'message') else str(exc))
     return redirect('operations_dashboard')
