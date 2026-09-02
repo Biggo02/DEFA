@@ -8,6 +8,7 @@ class Profile(models.Model):
     ROLE_CHOICES = [('CLIENT','Client'),('AGENT','Agent'),('ANALYST','Analyste'),('ADMIN','Administrateur')]
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='CLIENT')
+    postnom = models.CharField(max_length=150, blank=True)
     phone = models.CharField(max_length=30, blank=True)
     national_id = models.CharField(max_length=100, blank=True)
     photo = models.ImageField(upload_to='profiles/', blank=True, null=True)
