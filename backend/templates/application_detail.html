@@ -1,1 +1,21 @@
-{% extends 'base.html' %}{% block content %}<section class="page"><span class="pill">DOSSIER {{ app.id }}</span><h1>{{ app.get_status_display }}</h1><div class="grid three"><div class="card"><small>Capital demandé</small><strong>{{ app.amount|floatformat:0 }} FC</strong></div><div class="card"><small>Frais 12 %</small><strong>{{ fee|floatformat:0 }} FC</strong></div><div class="card"><small>Total estimatif</small><strong>{{ total|floatformat:0 }} FC</strong></div></div><div class="card"><h2>Détails</h2><p>Objet : {{ app.get_purpose_display }}</p><p>Durée : {{ app.duration_days }} jours</p><p>Fréquence : {{ app.get_frequency_display|default:app.frequency }}</p><p>Créée le {{ app.created_at|date:'d/m/Y H:i' }}</p></div><a class="btn" href="/app/tableau-de-bord/">Retour à mon espace</a></section>{% endblock %}
+{% extends 'base.html' %}
+{% block title %}Dossier — DEFA{% endblock %}
+{% block content %}
+<section class="page">
+  <span class="pill">DOSSIER {{ app.id }}</span>
+  <h1>{{ app.get_status_display }}</h1>
+  <div class="grid three">
+    <div class="card"><small>Capital demandé</small><strong>{{ app.amount|floatformat:0 }} FC</strong></div>
+    <div class="card"><small>Frais de service (12 %)</small><strong>{{ fee|floatformat:0 }} FC</strong></div>
+    <div class="card"><small>Total à rembourser</small><strong>{{ total|floatformat:0 }} FC</strong></div>
+  </div>
+  <div class="card"><h2>Détails du prêt</h2><p>Objet : {{ app.get_purpose_display }}</p><p>Durée : {{ app.duration_days }} jours</p><p>Fréquence : {{ app.frequency }}</p><p>Revenus mensuels : {{ app.monthly_income|floatformat:0 }} FC</p><p>Charges mensuelles : {{ app.monthly_expenses|floatformat:0 }} FC</p><p>Score : {{ app.score }}/100 · Risque : {{ app.risk_class }}</p><p>Créée le {{ app.created_at|date:'d/m/Y H:i' }}</p></div>
+  {% if app.status == 'DRAFT' or app.status == 'MORE_INFO' %}<div class="card"><h2>Prêt à soumettre ?</h2><p>Assurez-vous que votre pièce d’identité, vos deux références et votre source de revenus sont renseignées.</p><form method="post" action="{% url 'application_submit' app.id %}">{% csrf_token %}<button class="btn" type="submit">Soumettre ma demande</button></form></div>{% endif %}
+  <div class="grid two">
+    <div class="card"><h2>Adresse</h2>{% if address %}<p>{{ address.address }}</p><p>{{ address.neighborhood }}, {{ address.city }}</p>{% else %}<p>Non renseignée.</p>{% endif %}</div>
+    <div class="card"><h2>Références</h2><p>{{ references|length }} référence(s) enregistrée(s).</p>{% for r in references %}<p><strong>{{ r.name }}</strong> · {{ r.relationship }} · {{ r.phone }}</p>{% endfor %}</div>
+  </div>
+  <div class="card"><h2>Documents</h2>{% if documents %}{% for d in documents %}<p>{{ d.get_document_type_display }} — {{ d.get_status_display }}</p>{% endfor %}{% else %}<p>Aucun document.</p>{% endif %}</div>
+  <a class="btn secondary" href="{% url 'dashboard' %}">Retour à mon espace</a>
+</section>
+{% endblock %}
