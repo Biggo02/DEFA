@@ -1,1 +1,59 @@
-{% extends 'base.html' %}{% block content %}<section class="auth card"><h1>Créer votre compte</h1><form method="post">{% csrf_token %}<label>Nom d'utilisateur</label><input name="username" required><label>Prénom</label><input name="first_name" required><label>Nom</label><input name="last_name"><label>Téléphone</label><input name="phone" required placeholder="+243..."><label>Mot de passe</label><input name="password" type="password" minlength="8" required><button class="btn">Créer mon compte</button></form></section>{% endblock %}
+{% extends 'base.html' %}
+{% block title %}Inscription — DEFA{% endblock %}
+{% block content %}
+<section class="auth card">
+  <div class="pill">COMPTE CLIENT</div>
+  <h1>Créer votre compte</h1>
+  <p class="lead">Renseignez vos informations pour accéder à votre espace DEFA.</p>
+  <form method="post" id="register-form" autocomplete="on">
+    {% csrf_token %}
+
+    <label>Nom
+      <input name="last_name" autocomplete="family-name" required maxlength="150" placeholder="Votre nom">
+    </label>
+
+    <label>Postnom
+      <input name="postnom" autocomplete="additional-name" required maxlength="150" placeholder="Votre postnom">
+    </label>
+
+    <label>Prénom
+      <input name="first_name" autocomplete="given-name" required maxlength="150" placeholder="Votre prénom">
+    </label>
+
+    <label>Numéro de téléphone
+      <input name="phone" type="tel" inputmode="tel" autocomplete="tel" required maxlength="30" placeholder="+243 8XX XXX XXX">
+    </label>
+
+    <label>Mot de passe
+      <input name="password" id="password" type="password" autocomplete="new-password" minlength="8" required placeholder="8 caractères minimum">
+    </label>
+
+    <label>Confirmation du mot de passe
+      <input name="password_confirm" id="password_confirm" type="password" autocomplete="new-password" minlength="8" required placeholder="Retapez votre mot de passe">
+    </label>
+
+    <p id="password-error" class="alert" hidden>Les deux mots de passe doivent être identiques.</p>
+    <button class="btn" type="submit">Créer mon compte</button>
+  </form>
+  <p>Vous avez déjà un compte ? <a href="{% url 'login' %}">Se connecter</a></p>
+</section>
+<script>
+(function () {
+  const form = document.getElementById('register-form');
+  const password = document.getElementById('password');
+  const confirmation = document.getElementById('password_confirm');
+  const error = document.getElementById('password-error');
+  function check() {
+    const mismatch = confirmation.value.length > 0 && password.value !== confirmation.value;
+    confirmation.setCustomValidity(mismatch ? 'Les mots de passe ne correspondent pas.' : '');
+    error.hidden = !mismatch;
+  }
+  password.addEventListener('input', check);
+  confirmation.addEventListener('input', check);
+  form.addEventListener('submit', function (event) {
+    check();
+    if (!form.checkValidity()) event.preventDefault();
+  });
+})();
+</script>
+{% endblock %}
