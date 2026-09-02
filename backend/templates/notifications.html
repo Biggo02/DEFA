@@ -1,0 +1,3 @@
+{% extends 'base.html' %}
+{% block title %}Notifications — DEFA{% endblock %}
+{% block content %}<section class="page"><span class="pill">NOTIFICATIONS</span><h1>Mes notifications</h1><p class="lead">Suivez les mises à jour de vos demandes, prêts et paiements.</p><div class="card">{% for n in notifications %}<div class="row"><span><strong>{{ n.title }}</strong><small>{{ n.message }} · {{ n.created_at|date:'d/m/Y H:i' }}</small></span>{% if n.read_at %}<span>Lu</span>{% else %}<span>Non lu</span>{% endif %}</div>{% empty %}<p>Aucune notification.</p>{% endfor %}</div></section>{% endblock %}
