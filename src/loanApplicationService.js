@@ -1,9 +1,14 @@
 import { defaApi } from './api';
+import { MIN_LOAN_AMOUNT, LOAN_STEP, isValidLoanAmount, calculateLoanFee, calculateTotalRepayment } from './loanRules';
 
 /** Submit a complete DEFA loan application through the Django API. */
 export async function submitLoanApplication(form) {
+  const amount = Number(form.amount);
+  if (!isValidLoanAmount(amount)) {
+    throw new Error(`Le montant doit être au minimum de ${MIN_LOAN_AMOUNT.toLocaleString('fr-FR')} FC et un multiple de ${LOAN_STEP.toLocaleString('fr-FR')} FC.`);
+  }
   const payload = {
-    amount: Number(form.amount),
+    amount,
     purpose: form.purpose,
     employment_status: form.employmentStatus,
     monthly_income: Number(form.monthlyIncome || 0),
@@ -18,9 +23,10 @@ export async function submitLoanApplication(form) {
     location_consent: Boolean(form.locationConsent),
     latitude: form.latitude ?? null,
     longitude: form.longitude ?? null,
+    fee: calculateLoanFee(amount),
+    total_repayment: calculateTotalRepayment(amount),
   };
 
-  if (!payload.amount || payload.amount <= 0) throw new Error('Le montant demandé doit être supérieur à zéro.');
   if (!payload.purpose) throw new Error('Veuillez indiquer le motif du prêt.');
   if (!payload.location_consent) throw new Error('Le consentement de localisation est requis lorsque la localisation est demandée.');
 
