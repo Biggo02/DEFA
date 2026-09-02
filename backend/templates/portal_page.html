@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block title %}{{ page_title }} — DEFA{% endblock %}
+{% block content %}
+<section class="page">
+  <span class="pill">{{ eyebrow }}</span>
+  <h1>{{ page_title }}</h1>
+  <p class="lead">{{ page_description }}</p>
+  {% if cards %}
+  <div class="grid three">
+    {% for card in cards %}
+    <article class="card">
+      <small>{{ card.title }}</small>
+      {% if card.value %}<strong>{{ card.value }}</strong>{% endif %}
+      {% if card.text %}<p>{{ card.text }}</p>{% endif %}
+      {% if card.items %}<div class="mini-list">{% for item in card.items %}<div class="row"><span>{{ item }}</span></div>{% endfor %}</div>{% endif %}
+    </article>
+    {% endfor %}
+  </div>
+  {% endif %}
+  <div class="card">
+    <h2>DEFA</h2>
+    <p>Cette section est connectée au serveur Django et aux données du dossier. Les actions sensibles sont contrôlées par rôle et doivent rester traçables.</p>
+    {% if public_page %}<div class="actions"><a class="btn" href="{% url 'register' %}">Demander un prêt</a><a class="btn secondary" href="{% url 'simulator' %}">Simuler</a></div>{% endif %}
+    {% if client_page %}<div class="actions"><a class="btn" href="{% url 'dashboard' %}">Retour au tableau de bord</a><a class="btn secondary" href="{% url 'new_application' %}">Nouvelle demande</a></div>{% endif %}
+    {% if staff_page %}<div class="actions"><a class="btn" href="{% url 'operations_dashboard' %}">Retour aux opérations</a></div>{% endif %}
+  </div>
+</section>
+{% endblock %}
