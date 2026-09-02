@@ -14,7 +14,7 @@ services:
       retries: 10
   backend:
     build: ./backend
-    command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+    command: sh -c "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --access-logfile -"
     volumes:
       - ./backend:/app
     ports:
@@ -29,7 +29,7 @@ services:
       DB_PASSWORD: defa_dev_password
       DB_HOST: db
       DB_PORT: "5432"
-      CORS_ALLOWED_ORIGINS: http://localhost:5173
+      CORS_ALLOWED_ORIGINS: ""
     depends_on:
       db:
         condition: service_healthy
