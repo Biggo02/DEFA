@@ -31,6 +31,23 @@ AUTH_PASSWORD_VALIDATORS = [
 LANGUAGE_CODE='fr-fr'; TIME_ZONE='Africa/Lubumbashi'; USE_I18N=True; USE_TZ=True
 STATIC_URL='static/'; STATIC_ROOT=BASE_DIR/'staticfiles'; STATICFILES_DIRS=[BASE_DIR/'static']; MEDIA_URL='media/'; MEDIA_ROOT=BASE_DIR/'media'
 DEFAULT_AUTO_FIELD='django.db.models.BigAutoField'
+
+# CSRF: the Django frontend is served directly by the same application.
+# Codespaces/browser forwarding can expose it as HTTPS while Django runs locally.
+_csrf_origins = os.getenv('DJANGO_CSRF_TRUSTED_ORIGINS', '').strip()
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:8000',
+    'https://localhost:8000',
+    'http://127.0.0.1:8000',
+    'https://127.0.0.1:8000',
+    'https://*.app.github.dev',
+]
+if _csrf_origins:
+    CSRF_TRUSTED_ORIGINS.extend(origin.strip() for origin in _csrf_origins.split(',') if origin.strip())
+
+# Support HTTPS reported by the Codespaces/reverse-proxy layer.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 CORS_ALLOWED_ORIGINS=[x.strip() for x in os.getenv('CORS_ALLOWED_ORIGINS','').split(',') if x.strip()]
 REST_FRAMEWORK={'DEFAULT_AUTHENTICATION_CLASSES':['rest_framework.authentication.TokenAuthentication','rest_framework.authentication.SessionAuthentication'],'DEFAULT_PERMISSION_CLASSES':['rest_framework.permissions.IsAuthenticated'],'DEFAULT_THROTTLE_CLASSES':['rest_framework.throttling.AnonRateThrottle','rest_framework.throttling.UserRateThrottle'],'DEFAULT_THROTTLE_RATES':{'anon':'60/hour','user':'600/hour'}}
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
